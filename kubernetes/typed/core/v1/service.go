@@ -34,17 +34,193 @@ import (
 type ServicesGetter interface {
 	Services(namespace string) ServiceInterface
 }
+type Service struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard object's metadata.
+	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
+	// Spec defines the behavior of a service.
+	// https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
+	// +optional
+	Spec ServiceSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+
+	// Most recently observed status of the service.
+	// Populated by the system.
+	// Read-only.
+	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
+	// +optional
+	Status v1.ServiceStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
+}
+type MatchExpression struct {
+	Key string            `json:"key,omitempty" protobuf:"bytes,1,opt,name=key"`
+	Operator string       `json:"operator,omitempty" protobuf:"bytes,1,opt,name=operator"`
+	Values   []string     `json:"values,omitempty" protobuf:"bytes,1,opt,name=values"`
+}
+// ServiceSpec describes the attributes that a user creates on a service.
+type ServiceSpec struct {
+	// The list of ports that are exposed by this service.
+	// More info: https://kubernetes.io/docs/concepts/services-networking/service/#virtual-ips-and-service-proxies
+	// +patchMergeKey=port
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=port
+	// +listMapKey=protocol
+	Ports []v1.ServicePort `json:"ports,omitempty" patchStrategy:"merge" patchMergeKey:"port" protobuf:"bytes,1,rep,name=ports"`
+
+	// Route service traffic to pods with label keys and values matching this
+	// selector. If empty or not present, the service is assumed to have an
+	// external process managing its endpoints, which Kubernetes will not
+	// modify. Only applies to types ClusterIP, NodePort, and LoadBalancer.
+	// Ignored if type is ExternalName.
+	// More info: https://kubernetes.io/docs/concepts/services-networking/service/
+	// +optional
+	Selector map[string]string `json:"selector,omitempty" protobuf:"bytes,2,rep,name=selector"`
+	AdSelector map[string][]MatchExpression`json:"adselector,omitempty" protobuf:"bytes,2,rep,name=adselector"`
+	// clusterIP is the IP address of the service and is usually assigned
+	// randomly by the master. If an address is specified manually and is not in
+	// use by others, it will be allocated to the service; otherwise, creation
+	// of the service will fail. This field can not be changed through updates.
+	// Valid values are "None", empty string (""), or a valid IP address. "None"
+	// can be specified for headless services when proxying is not required.
+	// Only applies to types ClusterIP, NodePort, and LoadBalancer. Ignored if
+	// type is ExternalName.
+	// More info: https://kubernetes.io/docs/concepts/services-networking/service/#virtual-ips-and-service-proxies
+	// +optional
+	ClusterIP string `json:"clusterIP,omitempty" protobuf:"bytes,3,opt,name=clusterIP"`
+
+	// type determines how the Service is exposed. Defaults to ClusterIP. Valid
+	// options are ExternalName, ClusterIP, NodePort, and LoadBalancer.
+	// "ExternalName" maps to the specified externalName.
+	// "ClusterIP" allocates a cluster-internal IP address for load-balancing to
+	// endpoints. Endpoints are determined by the selector or if that is not
+	// specified, by manual construction of an Endpoints object. If clusterIP is
+	// "None", no virtual IP is allocated and the endpoints are published as a
+	// set of endpoints rather than a stable IP.
+	// "NodePort" builds on ClusterIP and allocates a port on every node which
+	// routes to the clusterIP.
+	// "LoadBalancer" builds on NodePort and creates an
+	// external load-balancer (if supported in the current cloud) which routes
+	// to the clusterIP.
+	// More info: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
+	// +optional
+	Type v1.ServiceType `json:"type,omitempty" protobuf:"bytes,4,opt,name=type,casttype=ServiceType"`
+
+	// externalIPs is a list of IP addresses for which nodes in the cluster
+	// will also accept traffic for this service.  These IPs are not managed by
+	// Kubernetes.  The user is responsible for ensuring that traffic arrives
+	// at a node with this IP.  A common example is external load-balancers
+	// that are not part of the Kubernetes system.
+	// +optional
+	ExternalIPs []string `json:"externalIPs,omitempty" protobuf:"bytes,5,rep,name=externalIPs"`
+
+	// Supports "ClientIP" and "None". Used to maintain session affinity.
+	// Enable client IP based session affinity.
+	// Must be ClientIP or None.
+	// Defaults to None.
+	// More info: https://kubernetes.io/docs/concepts/services-networking/service/#virtual-ips-and-service-proxies
+	// +optional
+	SessionAffinity v1.ServiceAffinity `json:"sessionAffinity,omitempty" protobuf:"bytes,7,opt,name=sessionAffinity,casttype=ServiceAffinity"`
+
+	// Only applies to Service Type: LoadBalancer
+	// LoadBalancer will get created with the IP specified in this field.
+	// This feature depends on whether the underlying cloud-provider supports specifying
+	// the loadBalancerIP when a load balancer is created.
+	// This field will be ignored if the cloud-provider does not support the feature.
+	// +optional
+	LoadBalancerIP string `json:"loadBalancerIP,omitempty" protobuf:"bytes,8,opt,name=loadBalancerIP"`
+
+	// If specified and supported by the platform, this will restrict traffic through the cloud-provider
+	// load-balancer will be restricted to the specified client IPs. This field will be ignored if the
+	// cloud-provider does not support the feature."
+	// More info: https://kubernetes.io/docs/tasks/access-application-cluster/configure-cloud-provider-firewall/
+	// +optional
+	LoadBalancerSourceRanges []string `json:"loadBalancerSourceRanges,omitempty" protobuf:"bytes,9,opt,name=loadBalancerSourceRanges"`
+
+	// externalName is the external reference that kubedns or equivalent will
+	// return as a CNAME record for this service. No proxying will be involved.
+	// Must be a valid RFC-1123 hostname (https://tools.ietf.org/html/rfc1123)
+	// and requires Type to be ExternalName.
+	// +optional
+	ExternalName string `json:"externalName,omitempty" protobuf:"bytes,10,opt,name=externalName"`
+
+	// externalTrafficPolicy denotes if this Service desires to route external
+	// traffic to node-local or cluster-wide endpoints. "Local" preserves the
+	// client source IP and avoids a second hop for LoadBalancer and Nodeport
+	// type services, but risks potentially imbalanced traffic spreading.
+	// "Cluster" obscures the client source IP and may cause a second hop to
+	// another node, but should have good overall load-spreading.
+	// +optional
+	ExternalTrafficPolicy v1.ServiceExternalTrafficPolicyType `json:"externalTrafficPolicy,omitempty" protobuf:"bytes,11,opt,name=externalTrafficPolicy"`
+
+	// healthCheckNodePort specifies the healthcheck nodePort for the service.
+	// If not specified, HealthCheckNodePort is created by the service api
+	// backend with the allocated nodePort. Will use user-specified nodePort value
+	// if specified by the client. Only effects when Type is set to LoadBalancer
+	// and ExternalTrafficPolicy is set to Local.
+	// +optional
+	HealthCheckNodePort int32 `json:"healthCheckNodePort,omitempty" protobuf:"bytes,12,opt,name=healthCheckNodePort"`
+
+	// publishNotReadyAddresses, when set to true, indicates that DNS implementations
+	// must publish the notReadyAddresses of subsets for the Endpoints associated with
+	// the Service. The default value is false.
+	// The primary use case for setting this field is to use a StatefulSet's Headless Service
+	// to propagate SRV records for its Pods without respect to their readiness for purpose
+	// of peer discovery.
+	// +optional
+	PublishNotReadyAddresses bool `json:"publishNotReadyAddresses,omitempty" protobuf:"varint,13,opt,name=publishNotReadyAddresses"`
+
+	// sessionAffinityConfig contains the configurations of session affinity.
+	// +optional
+	SessionAffinityConfig *v1.SessionAffinityConfig `json:"sessionAffinityConfig,omitempty" protobuf:"bytes,14,opt,name=sessionAffinityConfig"`
+
+	// ipFamily specifies whether this Service has a preference for a particular IP family (e.g. IPv4 vs.
+	// IPv6).  If a specific IP family is requested, the clusterIP field will be allocated from that family, if it is
+	// available in the cluster.  If no IP family is requested, the cluster's primary IP family will be used.
+	// Other IP fields (loadBalancerIP, loadBalancerSourceRanges, externalIPs) and controllers which
+	// allocate external load-balancers should use the same IP family.  Endpoints for this Service will be of
+	// this family.  This field is immutable after creation. Assigning a ServiceIPFamily not available in the
+	// cluster (e.g. IPv6 in IPv4 only cluster) is an error condition and will fail during clusterIP assignment.
+	// +optional
+	IPFamily *v1.IPFamily `json:"ipFamily,omitempty" protobuf:"bytes,15,opt,name=ipFamily,Configcasttype=IPFamily"`
+
+	// topologyKeys is a preference-order list of topology keys which
+	// implementations of services should use to preferentially sort endpoints
+	// when accessing this Service, it can not be used at the same time as
+	// externalTrafficPolicy=Local.
+	// Topology keys must be valid label keys and at most 16 keys may be specified.
+	// Endpoints are chosen based on the first topology key with available backends.
+	// If this field is specified and all entries have no backends that match
+	// the topology of the client, the service has no backends for that client
+	// and connections should fail.
+	// The special value "*" may be used to mean "any topology". This catch-all
+	// value, if used, only makes sense as the last value in the list.
+	// If this is not specified or empty, no topology constraints will be applied.
+	// +optional
+	TopologyKeys []string `json:"topologyKeys,omitempty" protobuf:"bytes,16,opt,name=topologyKeys"`
+}
+// ServiceList holds a list of services.
+type ServiceList struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard list metadata.
+	// More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+
+	// List of services
+	Items []Service `json:"items" protobuf:"bytes,2,rep,name=items"`
+}
 // ServiceInterface has methods to work with Service resources.
 type ServiceInterface interface {
-	Create(*v1.Service) (*v1.Service, error)
-	Update(*v1.Service) (*v1.Service, error)
-	UpdateStatus(*v1.Service) (*v1.Service, error)
+	Create(*Service) (*Service, error)
+	Update(*Service) (*Service, error)
+	UpdateStatus(*Service) (*Service, error)
 	Delete(name string, options *metav1.DeleteOptions) error
-	Get(name string, options metav1.GetOptions) (*v1.Service, error)
-	List(opts metav1.ListOptions) (*v1.ServiceList, error)
+	Get(name string, options metav1.GetOptions) (*Service, error)
+	List(opts metav1.ListOptions) (*ServiceList, error)
 	Watch(opts metav1.ListOptions) (watch.Interface, error)
-	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1.Service, err error)
+	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *Service, err error)
 	ServiceExpansion
 }
 
@@ -63,8 +239,8 @@ func newServices(c *CoreV1Client, namespace string) *services {
 }
 
 // Get takes name of the service, and returns the corresponding service object, and an error if there is any.
-func (c *services) Get(name string, options metav1.GetOptions) (result *v1.Service, err error) {
-	result = &v1.Service{}
+func (c *services) Get(name string, options metav1.GetOptions) (result *Service, err error) {
+	result = &Service{}
 	err = c.client.Get().
 		Namespace(c.ns).
 		Resource("services").
@@ -75,7 +251,7 @@ func (c *services) Get(name string, options metav1.GetOptions) (result *v1.Servi
 	return
 }
 
-// List takes label and field selectors, and returns the list of Services that match those selectors.
+// List takes label and fieeld selectors, and returns the list of Services that match those selectors.
 func (c *services) List(opts metav1.ListOptions) (result *v1.ServiceList, err error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
@@ -108,8 +284,8 @@ func (c *services) Watch(opts metav1.ListOptions) (watch.Interface, error) {
 }
 
 // Create takes the representation of a service and creates it.  Returns the server's representation of the service, and an error, if there is any.
-func (c *services) Create(service *v1.Service) (result *v1.Service, err error) {
-	result = &v1.Service{}
+func (c *services) Create(service *Service) (result *Service, err error) {
+	result = &Service{}
 	err = c.client.Post().
 		Namespace(c.ns).
 		Resource("services").
@@ -120,8 +296,8 @@ func (c *services) Create(service *v1.Service) (result *v1.Service, err error) {
 }
 
 // Update takes the representation of a service and updates it. Returns the server's representation of the service, and an error, if there is any.
-func (c *services) Update(service *v1.Service) (result *v1.Service, err error) {
-	result = &v1.Service{}
+func (c *services) Update(service *Service) (result *Service, err error) {
+	result = &Service{}
 	err = c.client.Put().
 		Namespace(c.ns).
 		Resource("services").
@@ -135,8 +311,8 @@ func (c *services) Update(service *v1.Service) (result *v1.Service, err error) {
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
 
-func (c *services) UpdateStatus(service *v1.Service) (result *v1.Service, err error) {
-	result = &v1.Service{}
+func (c *services) UpdateStatus(service *Service) (result *Service, err error) {
+	result = &Service{}
 	err = c.client.Put().
 		Namespace(c.ns).
 		Resource("services").
@@ -160,8 +336,8 @@ func (c *services) Delete(name string, options *metav1.DeleteOptions) error {
 }
 
 // Patch applies the patch and returns the patched service.
-func (c *services) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1.Service, err error) {
-	result = &v1.Service{}
+func (c *services) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *Service, err error) {
+	result = &Service{}
 	err = c.client.Patch(pt).
 		Namespace(c.ns).
 		Resource("services").
